@@ -1,3 +1,6 @@
+#LLM的标准输出事件with_structured_output
+#影响LLM的的输出以结构化的数据输出
+
 from langchain_openai import ChatOpenAI
 import os
 import asyncio
@@ -12,8 +15,4 @@ llm = ChatOpenAI(
     base_url=os.getenv("OPENAI_API_BASE")
 )
 
-question = "langchain是什么？"
 
-
-for chunk in llm.astream_events(question,version="v2"):
-    print(chunk.content, end="", flush=True)
