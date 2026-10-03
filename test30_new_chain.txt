@@ -1,0 +1,51 @@
+# 对，但不止实例化写法，分两层理解
+
+1. **表层：实例化方式改变（你说的这点，最直观）**
+旧：导入 Chain 类，构造函数传入各个组件
+
+```
+# 旧：实例化链容器
+chain = LLMChain(prompt=prompt, llm=llm)
+```
+
+新：**没有 Chain 容器类**，用 `|` 拼接多个 Runnable，拼接结果就是链实例
+
+```
+# 新：组件管道拼接
+chain = prompt | llm | StrOutputParser()
+```
+
+2. **深层配套改动（迁移时很容易漏掉，必须一起改）**
+
+- ✅ **调用方法要改**
+旧：`.run()` / `.predict()`
+新：统一 `.invoke(字典)`，输入必须传字典，不能直接字符串
+
+```
+#旧
+chain.run(topic="协程")
+#新
+chain.invoke({"topic":"协程"})
+```
+
+- ✅ **输出处理要改**
+老 LLMChain 默认自动提取 `llm返回消息的.content`；
+LCEL 里单独 `prompt|llm` 返回的是 `AIMessage` 对象，**不加 StrOutputParser 拿不到文本**。
+- ✅ **Memory 逻辑大改**
+老链：memory 传给 Chain，内部隐式读写、自动追加对话；
+LCEL：**没有内置 memory**，chat_history 列表由你自己在代码维护，通过占位符注入 prompt。
+- ✅ **变量传递方式变了（SequentialChain 迁移大坑）**
+老顺序链：在 SequentialChain 参数声明 input_variables/output_variables；
+LCEL 串行：用`RunnablePassthrough.assign`保留中间输出，手动控制字典里的字段。
+- ✅ **流式接口**
+老链 stream 支持参差不齐；LCEL 所有 Runnable 统一`.stream()`，chunk 行为有变化（并行链的 chunk 是字典）。
+
+# 一句话总结
+
+👉 **迁移第一步是修改链的实例化写法（把 Chain 类实例换成 | 管道拼接）；但完整迁移，还要同步修改调用方式、输出解析、变量传递、记忆管理。**
+
+简单比喻：
+旧：买一个 “链条盒子”，把齿轮（llm/prompt）装进去；
+新：直接拿齿轮首尾对接拼成流水线，盒子本身不存在了。
+
+要不要给你写一个最小迁移对照：**一行旧代码，改成 LCEL 版本，只看改动点**？
